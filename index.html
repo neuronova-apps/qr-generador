@@ -157,7 +157,7 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
     <div class="pair">
       <div>
         <label for="logoSize">Tamaño del logotipo (%)</label>
-        <input id="logoSize" type="number" value="15" min="5" max="20" step="1">
+        <input id="logoSize" type="number" value="27" min="5" max="35" step="1">
       </div>
       <div>
         <label for="margin">Margen blanco (módulos)</label>
@@ -165,7 +165,7 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
       </div>
     </div>
 
-    <p class="muted">El QR se muestra completo y ajustado al panel, independientemente del tamaño de exportación. El tamaño del PNG no determina la cantidad de módulos. La densidad depende principalmente del contenido codificado. Se usa corrección de errores alta para incluir un logotipo y se bloquea la descarga si la lectura automática falla.</p>
+    <p class="muted">Puedes ampliar el logotipo hasta el 35 %, sujeto a verificación. La cantidad de módulos depende del enlace y del nivel de corrección; se prueban configuraciones para buscar una menor densidad sin perder el logotipo.</p>
 
     <div class="actions">
       <button id="generate" type="button">Generar y verificar</button>
@@ -308,7 +308,7 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
 
     try {
       const size = Number($('size').value);
-      const logoPercent = Math.min(20, Math.max(5, Number($('logoSize').value) || 15));
+      const logoPercent = Math.min(35, Math.max(5, Number($('logoSize').value) || 27));
       const margin = Math.min(10, Math.max(4, Number($('margin').value) || 4));
       const color = $('dark').value;
       const secondary = $('light').value;
@@ -346,50 +346,59 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
         }
       };
 
-      let result;
+      let result = { decoded: null, label: '' };
       let options = { ...baseOptions };
-      if(selectedLogo) options.image = selectedLogo;
-      result = await verifyVariant(options, 'configuración principal');
-
-      // Con un logotipo seleccionado nunca sustituimos el resultado por uno
-      // sin logotipo de manera silenciosa.
-      if(result.decoded !== url && selectedLogo){
-        const levels = ['H', 'Q'];
-        const ratios = [0.12, 0.10, 0.08];
-        outer: for(const level of levels){
-          for(const ratio of ratios){
-            status('Ajustando tamaño del logotipo y verificando la lectura…');
+      const requestedRatio = logoPercent / 100;
+      if(selectedLogo){
+        const ratios = [requestedRatio, requestedRatio-.02, requestedRatio-.04, requestedRatio-.06, requestedRatio-.08, .16, .12, .09].filter((v,i,a) => v>=.09 && v<=requestedRatio && a.indexOf(v)===i);
+        let success = false;
+        for(const ratio of ratios){
+          if(success) break;
+          for(const level of ['Q','M','H']){
+            status('Probando logotipo ' + Math.round(ratio*100) + '% y corrección ' + level + '…');
             options = {
-              ...baseOptions,
-              image: selectedLogo,
-              qrOptions: { errorCorrectionLevel: level },
-              imageOptions: { ...baseOptions.imageOptions, imageSize: ratio },
-              dotsOptions: { type: 'square', color: '#000000' },
-              cornersSquareOptions: { type: 'square', color: '#000000' },
-              cornersDotOptions: { type: 'square', color: '#000000' }
+              ...baseOptions, image:selectedLogo,
+              qrOptions:{errorCorrectionLevel:level},
+              imageOptions:{...baseOptions.imageOptions,imageSize:ratio}
             };
-            result = await verifyVariant(options, 'logotipo conservado, tamaño reducido');
-            if(result.decoded === url) break outer;
+            result = await verifyVariant(options, 'logotipo ' + Math.round(ratio*100) + '%; corrección ' + level);
+            if(result.decoded===url){success=true;break}
           }
         }
-      }
-
-      if(result.decoded !== url && !selectedLogo && shape !== 'square'){
-        status('Probando módulos cuadrados negros para mejorar la lectura…');
-        options = {
-          ...baseOptions,
-          dotsOptions: { type: 'square', color: '#000000' },
-          cornersSquareOptions: { type: 'square', color: '#000000' },
-          cornersDotOptions: { type: 'square', color: '#000000' }
-        };
-        result = await verifyVariant(options, 'módulos cuadrados negros');
+        if(!success){
+          for(const ratio of [.16,.12,.09]){
+            if(ratio>requestedRatio)continue;
+            options = {
+              ...baseOptions, image:selectedLogo,
+              qrOptions:{errorCorrectionLevel:'H'},
+              imageOptions:{...baseOptions.imageOptions,imageSize:ratio},
+              dotsOptions:{type:'square',color:'#000000'},
+              cornersSquareOptions:{type:'square',color:'#000000'},
+              cornersDotOptions:{type:'square',color:'#000000'}
+            };
+            result = await verifyVariant(options,'alto contraste con logotipo ' + Math.round(ratio*100) + '%');
+            if(result.decoded===url)break;
+          }
+        }
+      }else{
+        options = {...baseOptions,qrOptions:{errorCorrectionLevel:'L'}};
+        result = await verifyVariant(options,'sin logotipo; corrección L');
+        if(result.decoded!==url && shape!=='square'){
+          options = {
+            ...baseOptions,qrOptions:{errorCorrectionLevel:'M'},
+            dotsOptions:{type:'square',color:'#000000'},
+            cornersSquareOptions:{type:'square',color:'#000000'},
+            cornersDotOptions:{type:'square',color:'#000000'}
+          };
+          result = await verifyVariant(options,'módulos cuadrados negros');
+        }
       }
 
       if(result.decoded === url){
         downloads(true);
         const msg = result.label === 'configuración principal'
           ? 'QR verificado: el código renderizado se decodificó correctamente y coincide con el enlace. Descargas habilitadas.'
-          : 'QR verificado con ajuste automático (' + result.label + '). El diseño original no era seguro para lectura; se dejó visible la variante que sí se pudo decodificar.';
+          : 'QR verificado con ajuste automático (' + result.label + '). Se conserva el logotipo seleccionado y se muestra la variante comprobada.';
         status(msg, 'ok');
       } else {
         downloads(false);
