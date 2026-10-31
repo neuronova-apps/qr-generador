@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827">
+<title>Generador QR | NeuroNova Apps</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#172033;background:#f4f6fb}*{box-sizing:border-box}body{margin:0}header{background:#101827;color:#fff;padding:26px max(20px,calc((100vw - 1120px)/2))}header h1{font-size:1.6rem;margin:0 0 6px}header p{margin:0;color:#cbd5e1}main{max-width:1120px;margin:28px auto;padding:0 18px;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(320px,.9fr);gap:22px}.panel{background:#fff;border:1px solid #dde4ef;border-radius:16px;padding:22px;box-shadow:0 4px 20px #1d33500b}h2{font-size:1.1rem;margin:0 0 18px}label{display:block;font-weight:650;font-size:.9rem;margin:14px 0 6px}input,select,button{font:inherit}input[type=url],input[type=text],input[type=number],select{width:100%;min-height:43px;padding:9px 11px;border:1px solid #aab7c9;border-radius:8px;background:#fff}input[type=color]{height:42px;width:100%;border:1px solid #aab7c9;border-radius:8px;padding:3px;background:white}input[type=file]{max-width:100%;font-size:.88rem}.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}.check{display:flex;align-items:center;gap:10px;margin:15px 0}.check label{margin:0;font-weight:500}.muted{color:#566477;font-size:.86rem;line-height:1.5}.preview{display:flex;align-items:center;justify-content:center;background:white;padding:15px;border:1px solid #e1e7ef;border-radius:12px;min-height:300px;overflow:auto}.preview canvas,.preview svg{max-width:100%;height:auto}#status{margin:14px 0;padding:12px;border-radius:9px;background:#f1f5f9;color:#334155;font-size:.9rem;line-height:1.4}#status.ok{background:#e8f7ed;color:#14532d}#status.bad{background:#fff0ee;color:#9a3412}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}button{border:0;border-radius:9px;padding:11px 16px;background:#172b4d;color:white;font-weight:650;cursor:pointer}button.secondary{background:#e8edf4;color:#192d4b}button:disabled{cursor:not-allowed;opacity:.5}footer{max-width:1120px;margin:4px auto 25px;padding:0 18px;color:#64748b;font-size:.8rem}@media(max-width:800px){main{grid-template-columns:1fr}.preview{min-height:240px}}@media(prefers-reduced-motion:no-preference){button{transition:opacity .15s}}
+</style>
+</head>
+<body><header><h1>Generador de QR personalizados</h1><p>NeuroNova Apps | Diseños con validación de lectura</p></header>
+<main><section class="panel" aria-labelledby="config"><h2 id="config">Configuración</h2>
+<label for="url">Enlace de destino</label><input id="url" type="url" spellcheck="false" value="https://crebeucayali.github.io/materiales-educativos-accesibles/" required>
+<div class="pair"><div><label for="dark">Color inicial</label><input id="dark" type="color" value="#000000"></div><div><label for="light">Color final del degradado</label><input id="light" type="color" value="#ff8000"></div></div>
+<div class="check"><input id="gradient" type="checkbox" checked><label for="gradient">Aplicar degradado a los módulos</label></div>
+<div class="pair"><div><label for="shape">Forma de módulos</label><select id="shape"><option value="square">Cuadrados (más seguros)</option><option value="rounded">Redondeados</option><option value="dots">Puntos</option></select></div><div><label for="size">Exportación (px)</label><select id="size"><option>512</option><option>768</option><option selected>1024</option><option>1147</option><option>2048</option></select></div></div>
+<label for="logo">Logotipo central (opcional)</label><input id="logo" type="file" accept="image/png,image/jpeg,image/webp">
+<div class="pair"><div><label for="logoSize">Tamaño del logotipo (%)</label><input id="logoSize" type="number" value="15" min="5" max="20" step="1"></div><div><label for="margin">Margen blanco (módulos)</label><input id="margin" type="number" value="4" min="4" max="10" step="1"></div></div>
+<p class="muted">El tamaño del archivo PNG no determina la cantidad de módulos. La densidad depende principalmente del contenido codificado. Se usa corrección de errores alta para incluir un logotipo.</p>
+<div class="actions"><button id="generate" type="button">Generar y verificar</button><button id="reset" class="secondary" type="button">Restablecer</button></div></section>
+<section class="panel" aria-labelledby="result"><h2 id="result">Vista previa y verificación</h2><div class="preview" id="preview" aria-label="Vista previa del QR"></div>
+<div id="status" role="status" aria-live="polite">Cargando biblioteca de QR…</div>
+<div class="actions"><button id="png" disabled>Descargar PNG</button><button id="svg" class="secondary" disabled>Descargar SVG</button></div>
+<p class="muted">La comprobación automática intenta decodificar el QR renderizado y comparar el resultado con el enlace ingresado. Comprueba también con la cámara de un teléfono antes de imprimir o difundirlo.</p>
+</section></main><footer>Proyecto independiente. No modifica los repositorios de EVA ni de sus módulos.</footer>
+<script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const ids=['url','dark','light','gradient','shape','size','logoSize','margin'];
+let qr=null,verified=false,logoData='',busy=false;
+function status(text,type){$('status').textContent=text;$('status').className=type||''}
+function downloads(ok){verified=ok;$('png').disabled=!ok;$('svg').disabled=!ok}
+function validUrl(value){try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)}catch{return false}}
+function loadLogo(file){return new Promise((resolve,reject)=>{if(!file)return resolve('');if(!['image/png','image/jpeg','image/webp'].includes(file.type))return reject(new Error('Formato de logotipo no admitido.'));if(file.size>3*1024*1024)return reject(new Error('El logotipo debe pesar menos de 3 MB.'));const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('No se pudo leer el logotipo.'));reader.readAsDataURL(file)})}
+function render(options){const obj=new QRCodeStyling(options);$('preview').replaceChildren();obj.append($('preview'));return obj}
+async function readRendered(){const canvas=$('preview').querySelector('canvas');if(!canvas)throw new Error('No se encontró el lienzo de verificación.');const ctx=canvas.getContext('2d',{willReadFrequently:true});const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);return jsQR(pixels.data,canvas.width,canvas.height,{inversionAttempts:'attemptBoth'})?.data||null}
+async function generate(){
+if(busy)return;downloads(false);const url=$('url').value.trim();if(!validUrl(url)){status('Introduce un enlace completo válido que comience por https:// o http://.','bad');return}
+if(typeof QRCodeStyling==='undefined'||typeof jsQR==='undefined'){status('No se pudieron cargar las bibliotecas. Verifica tu conexión y recarga la página.','bad');return}
+busy=true;$('generate').disabled=true;status('Generando y comprobando la lectura…');
+try{
+const size=Number($('size').value),logoPercent=Math.min(20,Math.max(5,Number($('logoSize').value)||15));
+const margin=Math.min(10,Math.max(4,Number($('margin').value)||4));
+const color=$('dark').value,secondary=$('light').value;
+const gradient=$('gradient').checked?{type:'linear',rotation:Math.PI/4,colorStops:[{offset:0,color},{offset:1,color:secondary}]}:undefined;
+const options={width:size,height:size,type:'canvas',data:url,margin:Math.round(size*margin/49),qrOptions:{errorCorrectionLevel:'H',mode:'Byte'},dotsOptions:{type:$('shape').value,color,gradient},cornersSquareOptions:{type:'square',color},cornersDotOptions:{type:'square',color},backgroundOptions:{color:'#ffffff'},imageOptions:{hideBackgroundDots:true,imageSize:logoPercent/100,margin:4,crossOrigin:'anonymous'}};
+if(logoData)options.image=logoData;
+qr=render(options);
+await new Promise(resolve=>setTimeout(resolve,220));
+let decoded=await readRendered();
+if(decoded!==url && logoData){status('El diseño con logotipo no se puede decodificar. Probando una versión sin logotipo…');delete options.image;qr=render(options);await new Promise(resolve=>setTimeout(resolve,220));decoded=await readRendered()}
+if(decoded!==url && $('shape').value!=='square'){status('Probando módulos cuadrados para mejorar la lectura…');options.dotsOptions={type:'square',color:'#000000'};options.cornersSquareOptions.color='#000000';options.cornersDotOptions.color='#000000';delete options.image;qr=render(options);await new Promise(resolve=>setTimeout(resolve,220));decoded=await readRendered()}
+if(decoded===url){downloads(true);status('QR verificado: el código renderizado se decodificó correctamente y coincide con el enlace. Descargas habilitadas.','ok')}
+else{downloads(false);status('No se pudo validar la lectura automática. No se permite descargar este diseño. Reduce el logotipo, mejora el contraste o usa módulos cuadrados.','bad')}
+}catch(error){downloads(false);status('Error al generar o validar: '+error.message,'bad')}finally{busy=false;$('generate').disabled=false}
+}
+$('logo').addEventListener('change',async()=>{try{logoData=await loadLogo($('logo').files[0]);downloads(false);status('Logotipo cargado. Pulsa Generar y verificar.')}catch(e){$('logo').value='';logoData='';downloads(false);status(e.message,'bad')}});
+$('generate').addEventListener('click',generate);
+$('reset').addEventListener('click',()=>{location.reload()});
+$('png').addEventListener('click',()=>{if(verified&&qr)qr.download({name:'qr-personalizado',extension:'png'})});
+$('svg').addEventListener('click',()=>{if(verified&&qr)qr.download({name:'qr-personalizado',extension:'svg'})});
+ids.forEach(id=>$(id).addEventListener('change',()=>{downloads(false);status('Configuración modificada. Genera y verifica de nuevo.')}));
+window.addEventListener('load',generate);
+})();
+</script></body></html>
