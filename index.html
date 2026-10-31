@@ -54,16 +54,18 @@ button.secondary{background:#fff;color:#111827;border:1px solid #cbd5e1}
 button:disabled{opacity:.55;cursor:not-allowed}
 .pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .preview{
-  min-height:420px;
+  min-height:320px;
+  max-width:100%;
   border:1px dashed #cbd5e1;
   border-radius:16px;
   display:flex;
   align-items:center;
   justify-content:center;
   background:linear-gradient(180deg,#fff,#f8fbff);
-  overflow:auto;
+  overflow:hidden;
   padding:16px;
 }
+.preview canvas,.preview svg{display:block;width:100%!important;max-width:380px!important;height:auto!important;aspect-ratio:1/1;object-fit:contain;flex:0 1 380px}
 .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}
 .actions button{flex:1}
 .check{display:flex;gap:10px;align-items:center;margin-top:12px}
@@ -110,7 +112,7 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
       </div>
       <div>
         <label for="light">Color final del degradado</label>
-        <input id="light" type="color" value="#ff8000">
+        <input id="light" type="color" value="#16bf50">
       </div>
     </div>
 
@@ -124,7 +126,7 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
         <label for="shape">Forma de módulos</label>
         <select id="shape">
           <option value="square">Cuadrados (más seguros)</option>
-          <option value="rounded">Redondeados</option>
+          <option value="rounded" selected>Redondeados (estilo de referencia)</option>
           <option value="dots">Puntos</option>
         </select>
       </div>
@@ -163,7 +165,7 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
       </div>
     </div>
 
-    <p class="muted">El tamaño del PNG no determina la cantidad de módulos. La densidad depende principalmente del contenido codificado. Se usa corrección de errores alta para incluir un logotipo y se bloquea la descarga si la lectura automática falla.</p>
+    <p class="muted">El QR se muestra completo y ajustado al panel, independientemente del tamaño de exportación. El tamaño del PNG no determina la cantidad de módulos. La densidad depende principalmente del contenido codificado. Se usa corrección de errores alta para incluir un logotipo y se bloquea la descarga si la lectura automática falla.</p>
 
     <div class="actions">
       <button id="generate" type="button">Generar y verificar</button>
@@ -179,6 +181,7 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
       <button id="png" disabled>Descargar PNG</button>
       <button id="svg" class="secondary" disabled>Descargar SVG</button>
     </div>
+    <p class="muted">Los marcadores de las tres esquinas permanecen negros para facilitar el reconocimiento. La vista previa no recorta el código ni altera el tamaño de exportación.</p>
     <p class="muted">La comprobación automática intenta decodificar el QR renderizado y comparar el resultado con el enlace ingresado. Además de la validación automática, comprueba también con la cámara de un teléfono antes de imprimir o difundirlo.</p>
   </section>
 </main>
@@ -192,6 +195,7 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
   'use strict';
 
   const CREBE_LOGO = 'assets/crebe-logo.png';
+  const LOGO_LEVELS = ['H','Q'];
   const $ = (id) => document.getElementById(id);
   const ids = ['url','dark','light','gradient','shape','size','logoMode','logoSize','margin'];
 
@@ -303,10 +307,10 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
         type: 'canvas',
         data: url,
         margin: Math.round(size * margin / 49),
-        qrOptions: { errorCorrectionLevel: 'H', mode: 'Byte' },
+        qrOptions: { errorCorrectionLevel: selectedLogo ? 'H' : 'M' },
         dotsOptions: { type: shape, color, gradient },
-        cornersSquareOptions: { type: 'square', color },
-        cornersDotOptions: { type: 'square', color },
+        cornersSquareOptions: { type: 'extra-rounded', color: '#000000' },
+        cornersDotOptions: { type: 'dot', color: '#000000' },
         backgroundOptions: { color: '#ffffff' },
         imageOptions: {
           hideBackgroundDots: true,
@@ -321,9 +325,17 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
       if(selectedLogo) options.image = selectedLogo;
       result = await verifyVariant(options, 'configuración principal');
 
+      // Intentar bajar la corrección a Q antes de retirar el logotipo:
+      // puede reducir la cantidad de módulos, sin sustituir la validación.
+      if(result.decoded !== url && selectedLogo){
+        status('Probando menor densidad conservando el logotipo…');
+        options = { ...baseOptions, image: selectedLogo, qrOptions: { errorCorrectionLevel: 'Q' } };
+        result = await verifyVariant(options, 'con logotipo y corrección Q');
+      }
+
       if(result.decoded !== url && selectedLogo){
         status('El diseño con logotipo no se puede decodificar. Probando una versión sin logotipo…');
-        options = { ...baseOptions };
+        options = { ...baseOptions, qrOptions: { errorCorrectionLevel: 'M' } };
         result = await verifyVariant(options, 'sin logotipo');
       }
 
@@ -331,6 +343,7 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
         status('Probando módulos cuadrados negros para mejorar la lectura…');
         options = {
           ...baseOptions,
+          qrOptions: { errorCorrectionLevel: selectedLogo ? 'H' : 'M' },
           dotsOptions: { type: 'square', color: '#000000' },
           cornersSquareOptions: { type: 'square', color: '#000000' },
           cornersDotOptions: { type: 'square', color: '#000000' }
