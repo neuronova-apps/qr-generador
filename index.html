@@ -195,7 +195,6 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
   'use strict';
 
   const CREBE_LOGO = 'assets/crebe-logo.png';
-  const LOGO_LEVELS = ['H','Q'];
   const $ = (id) => document.getElementById(id);
   const ids = ['url','dark','light','gradient','shape','size','logoMode','logoSize','margin'];
 
@@ -243,12 +242,34 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
     return obj;
   }
 
-  async function readRendered(){
-    const canvas = $('preview').querySelector('canvas');
-    if(!canvas) throw new Error('No se encontró el lienzo de verificación.');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    return jsQR(pixels.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' })?.data || null;
+  async function readRendered(blob){
+    // Validar el PNG generado (con el logotipo ya cargado), no un canvas
+    // que puede estar todavía dibujándose de forma asíncrona.
+    const image = await createImageBitmap(blob);
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(image, 0, 0);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      return jsQR(pixels.data, canvas.width, canvas.height, {
+        inversionAttempts: 'attemptBoth'
+      })?.data || null;
+    } finally {
+      image.close();
+    }
+  }
+
+  async function checkLogo(src){
+    if(!src) return;
+    const image = new Image();
+    image.src = src;
+    try {
+      await image.decode();
+    } catch {
+      throw new Error('No se puede cargar el logotipo seleccionado. Revisa assets/crebe-logo.png o vuelve a subir la imagen.');
+    }
   }
 
   function getSelectedLogo(){
@@ -260,8 +281,9 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
 
   async function verifyVariant(options, label){
     qr = render(options);
-    await new Promise(resolve => setTimeout(resolve, 250));
-    const decoded = await readRendered();
+    const png = await qr.getRawData('png');
+    if(!png) throw new Error('No se pudo obtener el QR renderizado.');
+    const decoded = await readRendered(png);
     return { decoded, label };
   }
 
@@ -291,6 +313,10 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
       const color = $('dark').value;
       const secondary = $('light').value;
       const selectedLogo = getSelectedLogo();
+      if($('logoMode').value === 'custom' && !selectedLogo){
+        throw new Error('Selecciona una imagen para el logotipo personalizado.');
+      }
+      await checkLogo(selectedLogo);
       const shape = $('shape').value;
       const gradient = $('gradient').checked ? {
         type: 'linear',
@@ -325,25 +351,33 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
       if(selectedLogo) options.image = selectedLogo;
       result = await verifyVariant(options, 'configuración principal');
 
-      // Intentar bajar la corrección a Q antes de retirar el logotipo:
-      // puede reducir la cantidad de módulos, sin sustituir la validación.
+      // Con un logotipo seleccionado nunca sustituimos el resultado por uno
+      // sin logotipo de manera silenciosa.
       if(result.decoded !== url && selectedLogo){
-        status('Probando menor densidad conservando el logotipo…');
-        options = { ...baseOptions, image: selectedLogo, qrOptions: { errorCorrectionLevel: 'Q' } };
-        result = await verifyVariant(options, 'con logotipo y corrección Q');
+        const levels = ['H', 'Q'];
+        const ratios = [0.12, 0.10, 0.08];
+        outer: for(const level of levels){
+          for(const ratio of ratios){
+            status('Ajustando tamaño del logotipo y verificando la lectura…');
+            options = {
+              ...baseOptions,
+              image: selectedLogo,
+              qrOptions: { errorCorrectionLevel: level },
+              imageOptions: { ...baseOptions.imageOptions, imageSize: ratio },
+              dotsOptions: { type: 'square', color: '#000000' },
+              cornersSquareOptions: { type: 'square', color: '#000000' },
+              cornersDotOptions: { type: 'square', color: '#000000' }
+            };
+            result = await verifyVariant(options, 'logotipo conservado, tamaño reducido');
+            if(result.decoded === url) break outer;
+          }
+        }
       }
 
-      if(result.decoded !== url && selectedLogo){
-        status('El diseño con logotipo no se puede decodificar. Probando una versión sin logotipo…');
-        options = { ...baseOptions, qrOptions: { errorCorrectionLevel: 'M' } };
-        result = await verifyVariant(options, 'sin logotipo');
-      }
-
-      if(result.decoded !== url && shape !== 'square'){
+      if(result.decoded !== url && !selectedLogo && shape !== 'square'){
         status('Probando módulos cuadrados negros para mejorar la lectura…');
         options = {
           ...baseOptions,
-          qrOptions: { errorCorrectionLevel: selectedLogo ? 'H' : 'M' },
           dotsOptions: { type: 'square', color: '#000000' },
           cornersSquareOptions: { type: 'square', color: '#000000' },
           cornersDotOptions: { type: 'square', color: '#000000' }
@@ -359,7 +393,7 @@ footer{max-width:1120px;margin:0 auto 26px;padding:0 18px;color:#475569}
         status(msg, 'ok');
       } else {
         downloads(false);
-        status('No se pudo validar la lectura automática. No se permite descargar este diseño. Reduce el logotipo, mejora el contraste o usa módulos cuadrados.', 'bad');
+        status(selectedLogo ? 'No se pudo validar el QR manteniendo el logotipo. No se descargará un código sin el logo que solicitaste. Prueba un enlace más corto o colores de mayor contraste.' : 'No se pudo validar la lectura automática. Prueba módulos cuadrados y colores de mayor contraste.', 'bad');
       }
     } catch (error) {
       downloads(false);
