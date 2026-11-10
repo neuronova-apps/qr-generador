@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Convertidor de imágenes | NeuroNova Apps</title><meta name="theme-color" content="#111827">
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#172033;background:#f4f6fb}*{box-sizing:border-box}body{margin:0}header{background:#101827;color:#fff;padding:25px max(18px,calc((100vw - 1120px)/2))}header h1{font-size:1.65rem;margin:8px 0}header p{margin:0;color:#cbd5e1}.back{color:#dbeafe;text-underline-offset:4px}main{max-width:1120px;margin:28px auto;padding:0 18px;display:grid;grid-template-columns:1fr 1fr;gap:22px}.panel{background:#fff;border:1px solid #dde4ef;border-radius:16px;padding:22px;box-shadow:0 10px 20px #00000008}h2{font-size:1.2rem;margin:0 0 16px}label{display:block;font-weight:600;margin:14px 0 7px}input,select,button{font:inherit;border-radius:10px}input:not([type=checkbox]),select{width:100%;padding:11px;border:1px solid #cbd5e1;background:#fff}input[type=file]{font-size:.9rem}button{border:0;background:#111827;color:#fff;padding:12px 16px;cursor:pointer;font-weight:700}button:disabled{opacity:.5;cursor:not-allowed}.secondary{background:white;color:#111827;border:1px solid #cbd5e1}.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}.check{display:flex;align-items:center;gap:9px;margin-top:12px}.check label{margin:0;font-weight:500}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.muted{font-size:.92rem;color:#475569;line-height:1.5}.preview{min-height:240px;max-height:480px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:repeating-conic-gradient(#e5e7eb 0 25%,#fff 0 50%) 50%/22px 22px;border:1px solid #cbd5e1;border-radius:12px}.preview img{display:block;max-width:100%;max-height:470px;object-fit:contain}#status{padding:12px;border-radius:10px;background:#eef2ff;margin:18px 0;white-space:pre-line}#status.good{background:#ecfdf3;color:#166534}#status.bad{background:#fef2f2;color:#991b1b}#results{margin:16px 0 0;padding:0;list-style:none}#results li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #e2e8f0;overflow-wrap:anywhere}#results a{color:#1d4ed8;font-weight:600}footer{max-width:1120px;margin:20px auto 40px;padding:0 18px;color:#475569}@media(max-width:850px){main{grid-template-columns:1fr}}@media(max-width:520px){.pair{grid-template-columns:1fr}.actions{flex-direction:column}.actions button{width:100%}}
+</style></head>
+<body><header><a class="back" href="../">← Volver a herramientas</a><h1>Convertidor y optimizador de imágenes</h1><p>NeuroNova Apps | Procesamiento local, sin subir tus imágenes.</p></header>
+<main><section class="panel" aria-labelledby="settings"><h2 id="settings">Configuración</h2>
+<label for="files">Seleccionar imágenes</label><input type="file" id="files" accept="image/png,image/jpeg,image/webp,image/bmp,image/avif,image/gif,image/*" multiple>
+<p class="muted">Puedes seleccionar varias imágenes. Para GIF animados o imágenes de varias páginas solo se procesa el primer fotograma visible.</p>
+<label for="format">Formato de salida</label><select id="format"><option value="image/webp">WebP</option><option value="image/jpeg">JPG / JPEG</option><option value="image/png">PNG</option><option value="image/avif">AVIF (si el navegador lo admite)</option></select>
+<div class="pair"><div><label for="width">Ancho (px)</label><input id="width" type="number" min="1" max="16000" placeholder="Original"></div><div><label for="height">Alto (px)</label><input id="height" type="number" min="1" max="16000" placeholder="Original"></div></div>
+<div class="check"><input id="ratio" type="checkbox" checked><label for="ratio">Mantener proporciones</label></div>
+<label for="quality">Calidad: <output id="qualityValue">85</output>%</label><input type="range" id="quality" min="10" max="100" value="85">
+<p class="muted">La calidad afecta principalmente a JPG y WebP. PNG utiliza compresión sin pérdida y el navegador puede ignorar el nivel seleccionado. La disponibilidad de AVIF varía.</p>
+<label for="background">Color de fondo al convertir transparencias a JPG</label><input id="background" type="color" value="#ffffff">
+<div class="actions"><button id="convert" type="button">Convertir imágenes</button><button id="reset" class="secondary" type="button">Restablecer</button></div>
+<div id="status" role="status" aria-live="polite">Selecciona una o varias imágenes para empezar.</div></section>
+<section class="panel" aria-labelledby="previewTitle"><h2 id="previewTitle">Vista previa</h2>
+<div class="preview" id="preview"><span>La imagen seleccionada aparecerá aquí</span></div>
+<p class="muted" id="details">Las dimensiones de entrada se mostrarán al seleccionar un archivo.</p>
+<h2>Archivos convertidos</h2><p class="muted">Las descargas se generan en tu navegador. No existe una cuota diaria de conversiones, aunque el dispositivo puede limitar imágenes muy grandes.</p><ul id="results"></ul>
+<div class="actions"><button id="downloadAll" class="secondary" disabled>Descargar todos por separado</button></div></section></main>
+<footer>NeuroNova Apps | La ampliación convencional cambia los píxeles, pero no recupera detalles que no existen en la imagen original.</footer>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+const urls=[];let outputs=[],originalWidth=0,originalHeight=0,lock=false,previewUrl='';
+const maxDimension=16000;
+const names={'image/webp':'webp','image/jpeg':'jpg','image/png':'png','image/avif':'avif'};
+function status(message,kind=''){$('status').textContent=message;$('status').className=kind;}
+function cleanup(){outputs.forEach(x=>URL.revokeObjectURL(x.url));outputs=[];$('results').replaceChildren();$('downloadAll').disabled=true;}
+function size(n){return n>=1048576?(n/1048576).toFixed(2)+' MB':(n/1024).toFixed(1)+' KB';}
+function loadImage(file){return new Promise((resolve,reject)=>{const url=URL.createObjectURL(file),im=new Image();im.onload=()=>{URL.revokeObjectURL(url);resolve(im)};im.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('No se pudo abrir '+file.name))};im.src=url;});}
+function selection(){const files=[...$('files').files];cleanup();originalWidth=originalHeight=0;if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl='';$('preview').replaceChildren();if(!files.length){$('preview').textContent='La imagen seleccionada aparecerá aquí';$('details').textContent='Selecciona un archivo.';return;}
+const file=files[0];previewUrl=URL.createObjectURL(file);const img=document.createElement('img');img.alt='Vista previa de '+file.name;img.src=previewUrl;$('preview').append(img);
+loadImage(file).then(image=>{originalWidth=image.naturalWidth;originalHeight=image.naturalHeight;$('width').value=originalWidth;$('height').value=originalHeight;$('details').textContent=file.name+' · '+originalWidth+' × '+originalHeight+' píxeles · '+size(file.size)+(files.length>1?' · '+files.length+' archivos seleccionados':'');status('Archivos preparados para convertir.');}).catch(e=>status(e.message,'bad'));}
+$('files').addEventListener('change',selection);
+$('quality').addEventListener('input',()=>{$('qualityValue').textContent=$('quality').value;});
+let editing=false;
+for(const side of ['width','height']){$(side).addEventListener('input',()=>{if(editing||!$('ratio').checked||!originalWidth||!originalHeight)return;editing=true;const value=Number($(side).value);const other=side==='width'?'height':'width';const factor=side==='width'?originalHeight/originalWidth:originalWidth/originalHeight;$(other).value=value?Math.max(1,Math.round(value*factor)):'';editing=false;});}
+$('reset').addEventListener('click',()=>location.reload());
+async function exportCanvas(canvas,type,quality){return new Promise((resolve,reject)=>{canvas.toBlob(blob=>{if(!blob)return reject(new Error('No se pudo exportar la imagen.'));resolve(blob)},type,quality);});}
+async function convertFile(file){const im=await loadImage(file);let w=Number($('width').value)||im.naturalWidth,h=Number($('height').value)||im.naturalHeight;
+if($('ratio').checked){const wSpecified=$('width').value.trim()!=='';const hSpecified=$('height').value.trim()!=='';if(wSpecified){h=Math.max(1,Math.round(w*im.naturalHeight/im.naturalWidth));}else if(hSpecified){w=Math.max(1,Math.round(h*im.naturalWidth/im.naturalHeight));}}
+w=Math.round(w);h=Math.round(h);if(!Number.isFinite(w)||!Number.isFinite(h)||w<1||h<1||w>maxDimension||h>maxDimension||w*h>70000000)throw new Error('Dimensiones fuera del límite de seguridad (hasta 16000 px por lado y 70 millones de píxeles).');
+const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('El navegador no pudo crear el lienzo.');
+ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';const type=$('format').value;
+if(type==='image/jpeg'){ctx.fillStyle=$('background').value;ctx.fillRect(0,0,w,h);}
+ctx.drawImage(im,0,0,w,h);const blob=await exportCanvas(canvas,type,Number($('quality').value)/100);
+if(blob.type!==type)throw new Error('Tu navegador no permite exportar '+names[type]+'. Elige otro formato.');
+const url=URL.createObjectURL(blob);const base=file.name.replace(/\.[^.]+$/,'').replace(/[\\/<>:"|?*]/g,'_');return {url,blob,name:base+'-'+w+'x'+h+'.'+names[type],width:w,height:h,original:file.size};}
+function addResult(output){const li=document.createElement('li'),info=document.createElement('span'),link=document.createElement('a');info.textContent=output.name+' ('+size(output.blob.size)+')';link.href=output.url;link.download=output.name;link.textContent='Descargar';li.append(info,link);$('results').append(li);}
+$('convert').addEventListener('click',async()=>{if(lock)return;const files=[...$('files').files];if(!files.length){status('Selecciona al menos una imagen.','bad');return;}lock=true;$('convert').disabled=true;cleanup();let successes=0;const errors=[];
+for(let i=0;i<files.length;i++){const file=files[i];status('Procesando '+(i+1)+' de '+files.length+': '+file.name);try{const out=await convertFile(file);outputs.push(out);addResult(out);successes++;}catch(e){errors.push(file.name+': '+e.message);}await new Promise(resolve=>setTimeout(resolve,0));}
+$('downloadAll').disabled=!successes;status(successes+' imagen(es) convertida(s).'+(errors.length?'\nNo convertidas:\n'+errors.join('\n'):'') ,errors.length?'bad':'good');lock=false;$('convert').disabled=false;});
+$('downloadAll').addEventListener('click',()=>{outputs.forEach((out,i)=>setTimeout(()=>{const a=document.createElement('a');a.href=out.url;a.download=out.name;a.click();},i*250));status('Descargas solicitadas. El navegador puede pedir autorización para permitir varios archivos.','good');});
+window.addEventListener('pagehide',()=>{cleanup();if(previewUrl)URL.revokeObjectURL(previewUrl);});
+})();
+</script></body></html>
