@@ -1,3 +1,30 @@
+# Herramientas de imágenes | NeuroNova Apps
+
+Este repositorio aloja dos utilidades web independientes bajo una portada común.
+
+## Rutas
+
+- Catálogo: https://neuronova-apps.github.io/qr-generador/
+- Generador QR: https://neuronova-apps.github.io/qr-generador/qr/
+- Convertidor de imágenes: https://neuronova-apps.github.io/qr-generador/convertidor-imagenes/
+
+## Estructura
+
+- `index.html`: tarjetas de acceso a ambas aplicaciones.
+- `qr/index.html`: aplicación QR original, conservada con la adaptación de ruta para su logotipo.
+- `assets/crebe-logo.png`: logotipo compartido que continúa utilizando el generador QR.
+- `convertidor-imagenes/index.html`: conversión y redimensionamiento local de imágenes.
+
+El convertidor permite seleccionar uno o varios archivos, exportar a PNG, JPEG y WebP, y exportar a AVIF cuando el navegador lo admite. Permite ajustar ancho, alto, proporción y calidad. No envía imágenes a un servidor. En imágenes animadas solo procesa el primer fotograma. La exportación por lotes se descarga como archivos individuales; algunos navegadores solicitan autorización para descargas múltiples.
+
+El generador QR requiere conexión a bibliotecas externas mediante CDN. El convertidor no requiere API ni servicio de conversión externo.
+
+## Antecedentes y cierre histórico del generador QR
+
+El texto siguiente conserva el registro de la versión de QR validada antes de esta reorganización.
+
+---
+
 # Generador de QR personalizados
 
 Aplicación web independiente de **NeuroNova Apps (NN)** para crear códigos QR a partir de enlaces HTTP(S), personalizar su apariencia y validar la decodificación del archivo renderizado antes de habilitar las descargas.
