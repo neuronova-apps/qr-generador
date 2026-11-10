@@ -19,6 +19,16 @@ El convertidor permite seleccionar uno o varios archivos, exportar a PNG, JPEG y
 
 El generador QR requiere conexión a bibliotecas externas mediante CDN. El convertidor no requiere API ni servicio de conversión externo.
 
+## Cierre funcional de la integración (9 de noviembre de 2026)
+
+**Estado:** cierre funcional satisfactorio, conforme a la comprobación de uso comunicada por el usuario.
+
+Se consolidó una portada con dos tarjetas de acceso, se ubicó el generador QR en `/qr/` y se incorporó el convertidor de imágenes en `/convertidor-imagenes/`, conservando el repositorio `qr-generador` y el logotipo del generador QR. El usuario indicó que utilizó las herramientas y que funcionan correctamente.
+
+**Alcance del cierre:** validación humana de uso. No se atribuyen pruebas automatizadas exhaustivas, compatibilidad universal entre navegadores ni auditorías adicionales que no se hayan realizado. No se requieren nuevas funcionalidades para el alcance actual. Se mantienen como mejoras opcionales futuras las descargas ZIP, formatos adicionales o edición avanzada.
+
+**Mantenimiento:** preservar las rutas públicas y el comportamiento validado; cualquier cambio posterior debe verificarse antes de publicarse.
+
 ## Antecedentes y cierre histórico del generador QR
 
 El texto siguiente conserva el registro de la versión de QR validada antes de esta reorganización.
